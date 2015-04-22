@@ -30,70 +30,50 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from urdf_parser_py.urdf import *
 import sys
+from urdf_parser_py import urdf
+xmlr = urdf.xmlr # define shortcut
 
 def on_error(message):
-#	sys.stderr.write(message + '\n')
-	pass
+	sys.stderr.write(message + '\n')
 xmlr.core.on_error = on_error
 
 xmlr.start_namespace('urdf')
 
 class TactileMarker(xmlr.Object):
 	""" TactileMarker represents the parsed XML structure of <tactile> tasgs in URDFs """
-	def __init__(self, source=None, geometry=None, origin=None, name=None):
+	def __init__(self, source=None, link=None, geometry=None, origin=None, name=None):
 		self.source = source
 		self.geometry = geometry
 		self.origin = origin
 		self.name = name
-		self.link = None
+		self.link = link
 
 xmlr.reflect(TactileMarker, params=[
+	xmlr.Attribute('link', str, True),
 	xmlr.Attribute('source', str, True),
 	xmlr.Element('geometry', 'geometric'),
-	origin_element,
-	name_attribute,
+	urdf.origin_element,
+	urdf.name_attribute,
 ])
 
-# I wasn't able to extend the default URDF parser. Hence, I simply rewrote
-# the Link and Robot classes to only included the interesting stuff.
-class Link(xmlr.Object):
-	def __init__(self, name=None):
-		self.aggregate_init()
-
-		self.name = name
+class Robot(urdf.Robot):
+	def __init__(self):
+		super(Robot, self).__init__()
 		self.tactiles = []
 
-xmlr.reflect(Link, params = [
-	name_attribute,
-	xmlr.AggregateElement('tactile', TactileMarker)
-	])
-
-class Robot(xmlr.Object):
-	def __init__(self):
-		self.aggregate_init()
-
-		self.links = []
-
-	@classmethod
-	def from_parameter_server(cls, key = 'robot_description'):
-		"""Retrieve the robot model from parameter server and parse it."""
-		import rospy
-		return cls.from_xml_string(rospy.get_param(key))
-
-	def getMarkers(self):
-		for link in self.links:
-			for marker in link.tactiles:
-				marker.link = link.name
-				yield marker
-
 xmlr.reflect(Robot, tag = 'robot', params = [
-	xmlr.AggregateElement('link', Link),
+# 	name_attribute,
+	xmlr.Attribute('name', str, False), # Is 'name' a required attribute?
+	xmlr.AggregateElement('link', urdf.Link),
+	xmlr.AggregateElement('joint', urdf.Joint),
+	xmlr.AggregateElement('gazebo', xmlr.RawType()),
+ 	xmlr.AggregateElement('transmission', 'transmission'),
+	xmlr.AggregateElement('material', urdf.Material),
+	xmlr.AggregateElement('tactile', TactileMarker)
 	])
 
 # make an alias
 URDF = Robot
 
 xmlr.end_namespace()
-

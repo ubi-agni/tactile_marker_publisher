@@ -54,7 +54,7 @@ except Exception as e:
 	exit(1)
 
 rospy.init_node('tactile_marker_publisher')
-pub = Publisher(robot.getMarkers())
+pub = Publisher(robot.tactiles)
 if pub.numMarkers == 0:
 	sys.stderr.write('could not find any markers\n')
 	exit(1)
