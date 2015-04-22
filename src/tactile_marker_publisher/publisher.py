@@ -31,34 +31,23 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import rospy
-from rqt_plot.plot_widget import get_plot_fields
-from rqt_plot.rosplot import get_topic_type
 from visualization_msgs.msg import MarkerArray
 from .parser import TactileMarker
 from .subscriber import Subscriber
 
 class Publisher(object):
-	def __init__(self, markers, markerNS='tactile_markers'):
+	def __init__(self, markers):
 		self.subscribers = {}
 		self.numMarkers = 0
 		for marker in markers:
 			assert isinstance(marker, TactileMarker)
 
-			# check whether source points to plotable fields
-			fields, message = get_plot_fields(marker.source)
-			if not len(fields): raise Exception(message)
-
-			# topic name and fields
-			topic_type, topic, fields = get_topic_type(marker.source)
-			if topic_type is None:
-				raise "Cannot resolve topic type of %s" % marker.source
-
-			if topic in self.subscribers:
-				sub = self.subscribers[topic]
+			if marker.topic in self.subscribers:
+				sub = self.subscribers[marker.topic]
 			else:
-				self.subscribers[topic] = sub = Subscriber(topic, topic_type)
+				self.subscribers[marker.topic] = sub = Subscriber(marker.topic)
 
-			sub.addMarker(marker, ns=markerNS, id=self.numMarkers)
+			sub.addMarker(marker, id=self.numMarkers)
 			self.numMarkers += 1
 
 		self.pub = rospy.Publisher('tactile_markers', MarkerArray, queue_size=1)

@@ -33,24 +33,19 @@
 import string
 import sys
 import threading
+import rospy
 import std_msgs.msg
 import geometry_msgs.msg
 import visualization_msgs.msg
 import roslib.message
-import rospy
 import numpy as np
 
-from rqt_plot.rosplot import get_topic_type
+from rospy.names import isstring
+from rostopic import get_topic_class
 from urdf_parser_py import urdf
 from tf.transformations import quaternion_from_euler
 from .parser import TactileMarker as TactileMarkerDesc
 
-
-# define an alias for basestring in python3 to allow for isinstance(, basestring) checks
-try:
-	basestring
-except NameError:
-	basestring = str
 
 class ColorMap(object):
 	def __init__(self, colors):
@@ -72,7 +67,7 @@ class ColorMap(object):
 
 	@classmethod
 	def _rgb_tuple_from(cls, color):
-		if isinstance(color, basestring):
+		if isstring(color):
 			try:
 				import webcolors
 				color = webcolors.hex_to_rgb(color) if color[0] == '#' else webcolors.name_to_rgb(color)
@@ -95,19 +90,16 @@ class Marker(visualization_msgs.msg.Marker):
 	defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
-		kwargs.update(frame_locked=True, action=Marker.ADD)
-		super(Marker, self).__init__(**kwargs)
+		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, **kwargs)
 		self.header.frame_id = desc.link
 
 		# new fields
-		_, _, fields = get_topic_type(desc.source)
-		self._field_evals = generate_field_evals(fields)
+		self._field_evals = generate_field_evals(desc.data)
 		self._tactile_data = []
 		self.dirty = False
 		self.colorMap = self.defaultColorMap
 
 		# handle general fields
-		if desc.name: self.text = desc.name
 		if desc.origin:
 			if desc.origin.xyz:
 				self.pose.position = geometry_msgs.msg.Point(*desc.origin.xyz)
@@ -138,16 +130,16 @@ class Subscriber(object):
 	corresponding to individual fields in the message
 	"""
 
-	def __init__(self, topic, topic_type):
+	def __init__(self, topic):
 		"""
 		:param topic:       ROS topic name
 		:param topic_type:  type of ROS topic
 		:return:            None
 		"""
+		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb)
 		self.lock = threading.Lock()
-		msg_class = roslib.message.get_message_class(topic_type)
-		self.sub = rospy.Subscriber(topic, msg_class, self._receive_cb)
 		self.markers = []
+		self.data_class = None
 
 	def addMarker(self, desc, **kwargs):
 		"""
@@ -155,7 +147,7 @@ class Subscriber(object):
 		@param TactileMarkerDesc marker	 marker specification
 		:rtype : Marker
 		"""
-		m = MeshMarker(desc, **kwargs)
+		m = MeshMarker(desc, ns=desc.ns, **kwargs)
 		# add marker to list
 		self.lock.acquire()
 		self.markers.append(m)
@@ -164,13 +156,20 @@ class Subscriber(object):
 	def close(self):
 		self.sub.unregister()
 
-	def _receive_cb(self, msg):
+	def _receive_cb(self, any_msg):
 		"""
 		ROS subscriber callback
 		:param msg: ROS message data
 		"""
 		try:
 			self.lock.acquire()
+			if self.data_class is None:
+				# retrieve topic type
+				self.data_class,_,_ = get_topic_class(self.sub.name)
+
+			# manually deserialize msg
+			msg = self.data_class()
+			msg.deserialize(any_msg._buff)
 			try:
 				# iterate over all markers on this topic
 				for m in self.markers:

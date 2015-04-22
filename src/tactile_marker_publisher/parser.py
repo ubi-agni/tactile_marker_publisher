@@ -42,19 +42,21 @@ xmlr.start_namespace('urdf')
 
 class TactileMarker(xmlr.Object):
 	""" TactileMarker represents the parsed XML structure of <tactile> tasgs in URDFs """
-	def __init__(self, source=None, link=None, geometry=None, origin=None, name=None):
-		self.source = source
+	def __init__(self, topic=None, data=None, link=None, geometry=None, origin=None, ns=''):
+		self.topic = topic
+		self.data = data
 		self.geometry = geometry
 		self.origin = origin
-		self.name = name
+		self.ns = ns
 		self.link = link
 
 xmlr.reflect(TactileMarker, params=[
 	xmlr.Attribute('link', str, True),
-	xmlr.Attribute('source', str, True),
+	xmlr.Attribute('topic', str, True),
+	xmlr.Attribute('data', str, True),
+	xmlr.Attribute('ns', str, False),
 	xmlr.Element('geometry', 'geometric'),
 	urdf.origin_element,
-	urdf.name_attribute,
 ])
 
 class Robot(urdf.Robot):
@@ -63,12 +65,11 @@ class Robot(urdf.Robot):
 		self.tactiles = []
 
 xmlr.reflect(Robot, tag = 'robot', params = [
-# 	name_attribute,
 	xmlr.Attribute('name', str, False), # Is 'name' a required attribute?
 	xmlr.AggregateElement('link', urdf.Link),
 	xmlr.AggregateElement('joint', urdf.Joint),
 	xmlr.AggregateElement('gazebo', xmlr.RawType()),
- 	xmlr.AggregateElement('transmission', 'transmission'),
+	xmlr.AggregateElement('transmission', 'transmission'),
 	xmlr.AggregateElement('material', urdf.Material),
 	xmlr.AggregateElement('tactile', TactileMarker)
 	])

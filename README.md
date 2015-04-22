@@ -5,13 +5,12 @@ It subscribes to the specified data stream / topic and republishes tactile press
 
 The syntax resembles the `<visual>` or `<collision>` tag syntax from `<link>` tags:
 ```xml
-<tactile source="/topic/field[2]/field[3]" link="link_attached_to" name="foo">
+<tactile topic="/topic" data="field[2]/field[3]" link="link_attached_to" ns="marker namespace">
 	<geometry>
-		<mesh filename="package://description/meshes/mesh.stl"
-			scale="1 1 1"/>
+		<mesh filename="package://description/meshes/mesh.stl" scale="1 1 1"/>
 	</geometry>
-	<origin xyz="0 0 0"/>
+	<origin xyz="0 0 0" rpy="0 0 0"/>
 </tactile>
 ```
 
-Here `source` describes the topic and data field to listen to - using a syntax that is well known from `rostopic echo`. The tactile marker will be attached to the `link` specified.
+Here `topic` and `data` describe the topic and data field to listen to - using a syntax that is well known from `rostopic echo`. The tactile marker will be attached to the `link` specified.
