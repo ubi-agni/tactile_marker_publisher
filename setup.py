@@ -7,7 +7,7 @@ d = generate_distutils_setup(
     packages=['tactile_marker_publisher'],
     package_dir={'': 'src'},
     scripts=['scripts/tactile_marker_publisher'],
-    requires=['genmsg', 'genpy', 'roslib', 'rospkg']
+    requires=['genmsg', 'genpy', 'roslib', 'rospkg', 'visualization_msgs', 'tf', 'numpy', 'webcolors']
 )
 
 setup(**d)
