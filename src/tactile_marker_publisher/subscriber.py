@@ -87,7 +87,8 @@ class Marker(visualization_msgs.msg.Marker):
 		assert isinstance(desc, TactileMarkerDesc)
 		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, ns=desc.ns, **kwargs)
 		self.header.frame_id = desc.link
-
+		# store range for normalization
+		self.xs, self.ys = desc.xs, desc.ys
 		# new fields
 		self._field_evals = generate_field_evals(desc.data)
 		self._tactile_data = []
@@ -100,6 +101,9 @@ class Marker(visualization_msgs.msg.Marker):
 			if desc.origin.rpy:
 				self.pose.orientation = geometry_msgs.msg.Quaternion(
 					*quaternion_from_euler(*desc.origin.rpy))
+
+	def normalize(self, value):
+		return np.interp(value, self.xs, self.ys)
 
 	def update(self, data):
 		pass
@@ -114,7 +118,7 @@ class MeshMarker(Marker):
 			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale
 
 	def update(self, data):
-		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(data))
+		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self.normalize(data)))
 
 
 class Subscriber(object):

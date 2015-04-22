@@ -39,19 +39,28 @@ xmlr.start_namespace('urdf')
 
 class TactileMarker(xmlr.Object):
 	""" TactileMarker represents the parsed XML structure of <tactile> tasgs in URDFs """
-	def __init__(self, topic=None, data=None, link=None, geometry=None, origin=None, ns=''):
+	def __init__(self, topic=None, data=None, link=None, geometry=None, origin=None,
+	             ns='', xs=[None, None], ys=[0, 1]):
 		self.topic = topic
 		self.data = data
 		self.geometry = geometry
 		self.origin = origin
 		self.ns = ns
 		self.link = link
+		self.xs = xs
+		self.ys = ys
+
+	def check_valid(self):
+		assert len(self.xs) == len(self.ys), 'ranges xs and ys should have same dimension'
+		assert min(self.ys) >= 0 and max(self.ys) <= 1, 'normalization range [0..1] exceeded'
 
 xmlr.reflect(TactileMarker, params=[
 	xmlr.Attribute('link', str, True),
 	xmlr.Attribute('topic', str, True),
 	xmlr.Attribute('data', str, True),
 	xmlr.Attribute('ns', str, False),
+	xmlr.Attribute('xs', 'vector', True),
+	xmlr.Attribute('ys', 'vector', False),
 	xmlr.Element('geometry', 'geometric'),
 	urdf.origin_element,
 ])
