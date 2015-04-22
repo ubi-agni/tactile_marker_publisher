@@ -8,14 +8,11 @@
 # are met:
 #
 # * Redistributions of source code must retain the above copyright
-# notice, this list of conditions and the following disclaimer.
+#   notice, this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above
-# copyright notice, this list of conditions and the following
-# disclaimer in the documentation and/or other materials provided
-# with the distribution.
-#  * Neither the name of Willow Garage, Inc. nor the names of its
-#	contributors may be used to endorse or promote products derived
-#	from this software without specific prior written permission.
+#   copyright notice, this list of conditions and the following
+#   disclaimer in the documentation and/or other materials provided
+#   with the distribution.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -33,51 +30,48 @@
 import string
 import sys
 import threading
+import numpy as np
+
 import rospy
 import std_msgs.msg
 import geometry_msgs.msg
 import visualization_msgs.msg
-import roslib.message
-import numpy as np
-
 from rospy.names import isstring
 from rostopic import get_topic_class
-from urdf_parser_py import urdf
 from tf.transformations import quaternion_from_euler
+
 from .parser import TactileMarker as TactileMarkerDesc
 
 
 class ColorMap(object):
 	def __init__(self, colors):
-		self.set_colors(colors)
-
-	def set_colors(self, colors):
 		colors = map(list, map(self._rgb_tuple_from, colors))
-		colors = np.reshape(colors, (-1,3))
-		self._rs = colors[:,0]
-		self._gs = colors[:,1]
-		self._bs = colors[:,2]
-		self._xs = np.linspace(0, 4095, len(colors))
+		colors = np.reshape(colors, (-1, 3))
+		self._rs = colors[:, 0]
+		self._gs = colors[:, 1]
+		self._bs = colors[:, 2]
+		self._xs = np.linspace(0, 1, len(colors))
 
 	def map(self, value):
 		return (np.interp(value, self._xs, self._rs),
-				np.interp(value, self._xs, self._gs),
-				np.interp(value, self._xs, self._bs),
-				1)
+		        np.interp(value, self._xs, self._gs),
+		        np.interp(value, self._xs, self._bs),
+		        1)
 
 	@classmethod
 	def _rgb_tuple_from(cls, color):
 		if isstring(color):
 			try:
 				import webcolors
+
 				color = webcolors.hex_to_rgb(color) if color[0] == '#' else webcolors.name_to_rgb(color)
-				color = (v/255. for v in color) # turn into list and normalize to [0..1]
+				color = (v / 255. for v in color)  # turn into list and normalize to [0..1]
 			except ImportError:
 				raise Exception('Cannot understand color names. Please install python-webcolors.')
 			except ValueError:
 				raise
 
-		elif not isinstance(color, (list,tuple)):
+		elif not isinstance(color, (list, tuple)):
 			raise Exception('unknown color specification: %s (expected name or (r,g,b) tuple)' % color)
 		return color
 
@@ -88,18 +82,18 @@ class Marker(visualization_msgs.msg.Marker):
 	"""
 
 	defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
+
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
-		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, **kwargs)
+		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, ns=desc.ns, **kwargs)
 		self.header.frame_id = desc.link
 
 		# new fields
 		self._field_evals = generate_field_evals(desc.data)
 		self._tactile_data = []
-		self.dirty = False
 		self.colorMap = self.defaultColorMap
 
-		# handle general fields
+		# handle optional fields
 		if desc.origin:
 			if desc.origin.xyz:
 				self.pose.position = geometry_msgs.msg.Point(*desc.origin.xyz)
@@ -107,7 +101,7 @@ class Marker(visualization_msgs.msg.Marker):
 				self.pose.orientation = geometry_msgs.msg.Quaternion(
 					*quaternion_from_euler(*desc.origin.rpy))
 
-	def update(self):
+	def update(self, data):
 		pass
 
 
@@ -139,7 +133,10 @@ class Subscriber(object):
 		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb)
 		self.lock = threading.Lock()
 		self.markers = []
-		self.data_class = None
+		self.last_any_msg = None
+		self.last_typed_msg = None
+		self.dirty = False
+		self.update_cb = None
 
 	def addMarker(self, desc, **kwargs):
 		"""
@@ -147,7 +144,7 @@ class Subscriber(object):
 		@param TactileMarkerDesc marker	 marker specification
 		:rtype : Marker
 		"""
-		m = MeshMarker(desc, ns=desc.ns, **kwargs)
+		m = MeshMarker(desc, **kwargs)
 		# add marker to list
 		self.lock.acquire()
 		self.markers.append(m)
@@ -161,34 +158,57 @@ class Subscriber(object):
 		ROS subscriber callback
 		:param msg: ROS message data
 		"""
-		try:
-			self.lock.acquire()
-			if self.data_class is None:
-				# retrieve topic type
-				self.data_class,_,_ = get_topic_class(self.sub.name)
+		self.lock.acquire()
+		if self.last_typed_msg is None:
+			# retrieve topic type
+			data_class, _, _ = get_topic_class(self.sub.name)
+			self.last_typed_msg = data_class()
 
-			# manually deserialize msg
-			msg = self.data_class()
-			msg.deserialize(any_msg._buff)
+		# store latest message for lazy processing on demand
+		self.last_any_msg = any_msg
+
+		if self.update_cb:
+			self.update()
+
+		self.lock.release()
+
+
+	def update(self):
+		"""
+		update all marker's internal data storage _tactileData
+		deserializing and extracting the data and applying the _update_cb()
+		Assumes, that lock was acquired before!
+		"""
+		if self.last_any_msg is None: return # data already updated
+
+		self.last_typed_msg.deserialize(self.last_any_msg._buff)
+		self.last_any_msg = None # indicate successful deserialization
+		# iterate over all markers and update their _tactileData
+		for m in self.markers:
 			try:
-				# iterate over all markers on this topic
-				for m in self.markers:
-					m._tactileData = _get_data(msg, m._field_evals)
-					m.dirty = True
+				data = _get_data(self.last_typed_msg, m._field_evals)
+				if self.update_cb:
+					m._tactileData = self.update_cb(data)
+				else:
+					m._tactileData = data
+				self.dirty = True
 
 			except Exception as e:
 				sys.stderr.write('%s\n' % e)
 
-		finally:
-			self.lock.release()
 
 	def getChangedMarkers(self):
-		result = []
 		try:
 			self.lock.acquire()
+			self.update()
+
+			result = []
+			if not self.dirty: return result
+
 			for m in self.markers:
-				if not m.dirty: continue
 				result.append(self.fillMarker(m))
+			self.dirty = False
+
 			return result
 
 		finally:
@@ -201,8 +221,8 @@ class Subscriber(object):
 		:return Marker m: updated marker msg
 		"""
 		m.update(m._tactileData)
-		m.dirty = False
 		return m
+
 
 ####################################################################################'
 # data accessor functions
@@ -221,6 +241,7 @@ def _array_eval(field_name, slot_num):
 	:param slot_num: index of slot to return, ``str``
 	:returns: fn(msg_field)->msg_field[slot_num]
 	"""
+
 	def fn(f):
 		return getattr(f, field_name).__getitem__(slot_num)
 
@@ -232,6 +253,7 @@ def _field_eval(field_name):
 	:param field_name: name of field to return, ``str``
 	:returns: fn(msg_field)->msg_field.field_name
 	"""
+
 	def fn(f):
 		return getattr(f, field_name)
 
