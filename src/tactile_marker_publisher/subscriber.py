@@ -38,10 +38,53 @@ import geometry_msgs.msg
 import visualization_msgs.msg
 import roslib.message
 import rospy
+import numpy as np
 
 from rqt_plot.rosplot import get_topic_type
 from urdf_parser_py import urdf
+from tf.transformations import quaternion_from_euler
 from .parser import TactileMarker as TactileMarkerDesc
+
+
+# define an alias for basestring in python3 to allow for isinstance(, basestring) checks
+try:
+	basestring
+except NameError:
+	basestring = str
+
+class ColorMap(object):
+	def __init__(self, colors):
+		self.set_colors(colors)
+
+	def set_colors(self, colors):
+		colors = map(list, map(self._rgb_tuple_from, colors))
+		colors = np.reshape(colors, (-1,3))
+		self._rs = colors[:,0]
+		self._gs = colors[:,1]
+		self._bs = colors[:,2]
+		self._xs = np.linspace(0, 4095, len(colors))
+
+	def map(self, value):
+		return (np.interp(value, self._xs, self._rs),
+				np.interp(value, self._xs, self._gs),
+				np.interp(value, self._xs, self._bs),
+				1)
+
+	@classmethod
+	def _rgb_tuple_from(cls, color):
+		if isinstance(color, basestring):
+			try:
+				import webcolors
+				color = webcolors.hex_to_rgb(color) if color[0] == '#' else webcolors.name_to_rgb(color)
+				color = (v/255. for v in color) # turn into list and normalize to [0..1]
+			except ImportError:
+				raise Exception('Cannot understand color names. Please install python-webcolors.')
+			except ValueError:
+				raise
+
+		elif not isinstance(color, (list,tuple)):
+			raise Exception('unknown color specification: %s (expected name or (r,g,b) tuple)' % color)
+		return color
 
 
 class Marker(visualization_msgs.msg.Marker):
@@ -49,6 +92,7 @@ class Marker(visualization_msgs.msg.Marker):
 	Extension of visualization_msgs.msg.Marker to hold tactile data fields
 	"""
 
+	defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
 		kwargs.update(frame_locked=True, action=Marker.ADD)
@@ -60,6 +104,7 @@ class Marker(visualization_msgs.msg.Marker):
 		self._field_evals = generate_field_evals(fields)
 		self._tactile_data = []
 		self.dirty = False
+		self.colorMap = self.defaultColorMap
 
 		# handle general fields
 		if desc.name: self.text = desc.name
@@ -67,8 +112,8 @@ class Marker(visualization_msgs.msg.Marker):
 			if desc.origin.xyz:
 				self.pose.position = geometry_msgs.msg.Point(*desc.origin.xyz)
 			if desc.origin.rpy:
-				# TODO: Is there a function to transform rpy into quaternion?
-				self.pose.orientation = geometry_msgs.msg.Quaternion(desc.origin.rpy)
+				self.pose.orientation = geometry_msgs.msg.Quaternion(
+					*quaternion_from_euler(*desc.origin.rpy))
 
 	def update(self):
 		pass
@@ -83,7 +128,7 @@ class MeshMarker(Marker):
 			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale
 
 	def update(self, data):
-		self.color = colorMapping(data)
+		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(data))
 
 
 class Subscriber(object):
@@ -177,7 +222,6 @@ def _array_eval(field_name, slot_num):
 	:param slot_num: index of slot to return, ``str``
 	:returns: fn(msg_field)->msg_field[slot_num]
 	"""
-
 	def fn(f):
 		return getattr(f, field_name).__getitem__(slot_num)
 
@@ -189,7 +233,6 @@ def _field_eval(field_name):
 	:param field_name: name of field to return, ``str``
 	:returns: fn(msg_field)->msg_field.field_name
 	"""
-
 	def fn(f):
 		return getattr(f, field_name)
 
@@ -210,18 +253,3 @@ def generate_field_evals(fields):
 		return evals
 	except Exception, e:
 		raise Exception("cannot parse field reference [%s]: %s" % (fields, str(e)))
-
-def colorMapping(value):
-	if value > 4095: value = 4095
-	if value <= 1365:
-		R = 0
-		G = 0x100 * (1. if 1000*value / 5353 > 255 else 1000*value / 1365015.0)
-	else:
-		if value <= 2730:
-			R = 1000 * (value-1365) / 1365015.0
-			G = 1.
-		else:
-			R = 1.
-			G = 1. - ((1000*(value-2730) / 1365015.0))
-
-	return std_msgs.msg.ColorRGBA(r=R, g=G, b=0, a=1)

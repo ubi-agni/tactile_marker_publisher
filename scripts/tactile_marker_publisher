@@ -49,15 +49,17 @@ try:
 		robot = URDF.from_parameter_server()
 	else:
 		robot = URDF.from_xml_string(args.file.read())
+
+	rospy.init_node('tactile_marker_publisher')
+	pub = Publisher(robot.tactiles)
+	if pub.numMarkers == 0:
+		raise Exception('Could not find any markers')
+
 except Exception as e:
-	print(e)
+	# fetch all config time errors
+	sys.stderr.write('%s\n' % e)
 	exit(1)
 
-rospy.init_node('tactile_marker_publisher')
-pub = Publisher(robot.tactiles)
-if pub.numMarkers == 0:
-	sys.stderr.write('could not find any markers\n')
-	exit(1)
 
 rate = rospy.Rate(args.rate)  # Hz
 while not rospy.is_shutdown():
