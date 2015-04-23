@@ -33,14 +33,17 @@ import threading
 import numpy as np
 
 import rospy
+import genpy
 import std_msgs.msg
 import geometry_msgs.msg
 import visualization_msgs.msg
+
 from rospy.names import isstring
 from rostopic import get_topic_class
 from tf.transformations import quaternion_from_euler
 
-from .parser import TactileMarker as TactileMarkerDesc
+import parser
+TactileMarkerDesc = parser.TactileMarker
 
 
 class ColorMap(object):
@@ -87,6 +90,7 @@ class Marker(visualization_msgs.msg.Marker):
 		assert isinstance(desc, TactileMarkerDesc)
 		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, ns=desc.ns, **kwargs)
 		self.header.frame_id = desc.link
+		self.lifetime = genpy.Duration(10)
 
 		# store range for normalization
 		self.xs, self.ys = desc.xs, desc.ys
@@ -95,7 +99,7 @@ class Marker(visualization_msgs.msg.Marker):
 
 		# new fields
 		self._field_evals = generate_field_evals(desc.data)
-		self._tactile_data = []
+		self._tactile_data = None
 		self.colorMap = self.defaultColorMap
 
 		# handle optional fields
@@ -128,17 +132,39 @@ class MeshMarker(Marker):
 		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self.normalize(data)))
 
 
+class PixelGridMarker(Marker):
+	def __init__(self, desc, **kwargs):
+		super(PixelGridMarker, self).__init__(desc, **kwargs)
+
+		self.type = Marker.CUBE_LIST
+		g = desc.geometry
+		xoff, yoff = [-(n-1)/2. * delta for n, delta in zip(g.size, g.spacing)]
+		xdelta, ydelta = g.spacing
+		for xi in range(int(g.size[0])):
+			for yi in range(int(g.size[1])):
+				self.points.append(geometry_msgs.msg.Point(xoff+xi*xdelta,
+				                                           yoff+yi*ydelta,
+				                                           0))
+				self.colors.append(std_msgs.msg.ColorRGBA())
+		self.scale.x, self.scale.y = g.scale
+
+	def update(self, data):
+		assert len(self.colors) == len(data)
+		for color, val in zip(self.colors, data):
+			color.r, color.g, color.b, color.a = self.colorMap.map(self.normalize(val))
+
+
 class Subscriber(object):
 	"""
 	Subscriber to ROS topic buffering latest tactile data
 	A single subscriber can have several markers attached to it,
 	corresponding to individual fields in the message
 	"""
+	factory = {parser.urdf.Mesh: MeshMarker, parser.Grid: PixelGridMarker}
 
 	def __init__(self, topic):
 		"""
 		:param topic:       ROS topic name
-		:param topic_type:  type of ROS topic
 		:return:            None
 		"""
 		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb)
@@ -149,13 +175,19 @@ class Subscriber(object):
 		self.dirty = False
 		self.update_cb = None
 
+	def createMarker(self, desc, **kwargs):
+		for type, factory in self.factory.iteritems():
+			if isinstance(desc.geometry, type):
+				return factory(desc, **kwargs)
+		raise Exception('unknown marker geometry %s' % desc.geometry)
+
 	def addMarker(self, desc, **kwargs):
 		"""
 		add marker
 		@param TactileMarkerDesc marker	 marker specification
 		:rtype : Marker
 		"""
-		m = MeshMarker(desc, **kwargs)
+		m = self.createMarker(desc, **kwargs)
 		# add marker to list
 		self.lock.acquire()
 		self.markers.append(m)
@@ -167,7 +199,7 @@ class Subscriber(object):
 	def _receive_cb(self, any_msg):
 		"""
 		ROS subscriber callback
-		:param msg: ROS message data
+		:param any_msg: ROS message data (unserialized)
 		"""
 		self.lock.acquire()
 		if self.last_typed_msg is None:
@@ -186,7 +218,7 @@ class Subscriber(object):
 
 	def update(self):
 		"""
-		update all marker's internal data storage _tactileData
+		update all marker's internal data storage _tactile_data
 		deserializing and extracting the data and applying the _update_cb()
 		Assumes, that lock was acquired before!
 		"""
@@ -194,14 +226,14 @@ class Subscriber(object):
 
 		self.last_typed_msg.deserialize(self.last_any_msg._buff)
 		self.last_any_msg = None # indicate successful deserialization
-		# iterate over all markers and update their _tactileData
+		# iterate over all markers and update their _tactile_data
 		for m in self.markers:
 			try:
 				data = _get_data(self.last_typed_msg, m._field_evals)
 				if self.update_cb:
-					m._tactileData = self.update_cb(data)
+					m._tactile_data = self.update_cb(data)
 				else:
-					m._tactileData = data
+					m._tactile_data = data
 				self.dirty = True
 
 			except Exception as e:
@@ -231,7 +263,7 @@ class Subscriber(object):
 		:param  Marker m: marker msg
 		:return Marker m: updated marker msg
 		"""
-		m.update(m._tactileData)
+		m.update(m._tactile_data)
 		return m
 
 
@@ -240,10 +272,10 @@ class Subscriber(object):
 ####################################################################################'
 def _get_data(val, field_evals):
 	if not field_evals:
-		return float(val)
+		return val
 	for f in field_evals:
 		val = f(val)
-	return float(val)
+	return val
 
 
 def _array_eval(field_name, slot_num):
