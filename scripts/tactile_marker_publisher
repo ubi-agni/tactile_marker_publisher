@@ -39,15 +39,16 @@ parser.add_argument('file', type=argparse.FileType('r'), nargs='?', default=None
                     help='URDF file to load (use - for stdin)')
 parser.add_argument('--rate', type=int, nargs='?', default=10,
                     help='marker publishing rate')
-args = parser.parse_args()
+args = parser.parse_args(rospy.myargv()[1:])
 
 try:
+	rospy.init_node('tactile_marker_publisher')
+
 	if args.file is None:
 		robot = URDF.from_parameter_server()
 	else:
 		robot = URDF.from_xml_string(args.file.read())
 
-	rospy.init_node('tactile_marker_publisher')
 	pub = Publisher(robot.tactiles)
 	if pub.numMarkers == 0:
 		raise Exception('Could not find any markers')
