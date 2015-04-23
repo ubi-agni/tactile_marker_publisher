@@ -59,7 +59,7 @@ xmlr.reflect(TactileMarker, params=[
 	xmlr.Attribute('topic', str, True),
 	xmlr.Attribute('data', str, True),
 	xmlr.Attribute('ns', str, False),
-	xmlr.Attribute('xs', 'vector', True),
+	xmlr.Attribute('xs', 'vector', False),
 	xmlr.Attribute('ys', 'vector', False),
 	xmlr.Element('geometry', 'geometric'),
 	urdf.origin_element,

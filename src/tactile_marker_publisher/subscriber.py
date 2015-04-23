@@ -87,8 +87,12 @@ class Marker(visualization_msgs.msg.Marker):
 		assert isinstance(desc, TactileMarkerDesc)
 		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, ns=desc.ns, **kwargs)
 		self.header.frame_id = desc.link
+
 		# store range for normalization
 		self.xs, self.ys = desc.xs, desc.ys
+		self.auto_range = any(v is None for v in self.xs)
+		if self.auto_range: self.xs = [float('inf'), float('-inf')]
+
 		# new fields
 		self._field_evals = generate_field_evals(desc.data)
 		self._tactile_data = []
@@ -103,6 +107,9 @@ class Marker(visualization_msgs.msg.Marker):
 					*quaternion_from_euler(*desc.origin.rpy))
 
 	def normalize(self, value):
+		if self.auto_range:
+			self.xs[0] = min(self.xs[0], value)
+			self.xs[1] = max(self.xs[1], value)
 		return np.interp(value, self.xs, self.ys)
 
 	def update(self, data):
