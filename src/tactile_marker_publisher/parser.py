@@ -46,13 +46,13 @@ class Grid(xmlr.Object):
 	def __init__(self, size=None, spacing=None, scale=None):
 		self.size = size
 		self.spacing = spacing
-		self.scale = scale if scale is not None else [1, 1]
+		self.scale = scale if scale is not None else self.spacing
 
 
 xmlr.reflect(Grid, params=[
 	xmlr.Attribute('size', 'vector2', required=True),
-    xmlr.Attribute('spacing', 'vector2', required=True),
-	xmlr.Attribute('scale', 'vector2', required=True)
+	xmlr.Attribute('spacing', 'vector2', required=True),
+	xmlr.Attribute('scale', 'vector2', required=False)
 ])
 
 
