@@ -94,6 +94,15 @@ class Marker(visualization_msgs.msg.Marker):
 
 		# store range for normalization
 		self.xs, self.ys = desc.xs, desc.ys
+		inreasing  = np.all(np.diff(self.xs) > 0)
+		decreasing = np.all(np.diff(self.xs) < 0)
+		if not inreasing:
+			if decreasing:
+				# reverse order of xs and ys
+				self.xs = list(reversed(self.xs))
+				self.ys = list(reversed(self.ys))
+			else:
+				raise Exception('expected list of strictly increasing or decreasing values')
 		self.auto_range = any(v is None for v in self.xs)
 		if self.auto_range: self.xs = [float('inf'), float('-inf')]
 
