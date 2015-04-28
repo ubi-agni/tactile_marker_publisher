@@ -83,8 +83,10 @@ class Marker(visualization_msgs.msg.Marker):
 	"""
 	Extension of visualization_msgs.msg.Marker to hold tactile data fields
 	"""
-
-	defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
+	try:
+		defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
+	except Exception:
+		defaultColorMap = ColorMap([(0,0,0), (0,1,0), (1,1,0), (1,0,0)])
 
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
