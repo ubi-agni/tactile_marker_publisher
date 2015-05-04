@@ -27,6 +27,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from __future__ import print_function
 import string
 import sys
 import threading
@@ -248,7 +249,7 @@ class Subscriber(object):
 				self.dirty = True
 
 			except Exception as e:
-				sys.stderr.write('%s\n' % e)
+				print(e, file=sys.stderr)
 
 
 	def getChangedMarkers(self):

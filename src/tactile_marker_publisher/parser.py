@@ -27,6 +27,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from __future__ import print_function
 import sys
 from urdf_parser_py import urdf
 
@@ -34,7 +35,7 @@ xmlr = urdf.xmlr  # define shortcut
 
 
 def on_error(message):
-	sys.stderr.write(message + '\n')
+	print(message, file=sys.stderr)
 
 
 xmlr.core.on_error = on_error
