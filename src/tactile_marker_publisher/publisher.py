@@ -48,6 +48,7 @@ class Publisher(object):
 			self.numMarkers += 1
 
 		self.pub = rospy.Publisher('tactile_markers', MarkerArray, queue_size=1)
+		print
 
 	def publish(self):
 		"""

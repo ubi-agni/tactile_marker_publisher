@@ -39,7 +39,7 @@ parser = argparse.ArgumentParser(usage='display tactile markers in an URDF')
 parser.add_argument('file', type=argparse.FileType('r'), nargs='?', default=None,
                     help='URDF file to load (use - for stdin)')
 parser.add_argument('--rate', type=int, nargs='?', default=10,
-                    help='marker publishing rate')
+                    help='marker publishing rate [secs]')
 args = parser.parse_args(rospy.myargv()[1:])
 
 try:

@@ -36,17 +36,17 @@ from rospy.names import isstring
 from tf.transformations import quaternion_from_euler
 
 import msg
-import parser
-TactileMarkerDesc = parser.TactileMarker
+from parser import TactileMarker as TactileMarkerDesc
+from tactile import TactileValue
 
 class ColorMap(object):
-	def __init__(self, colors):
+	def __init__(self, colors, min=0, max=1):
 		colors = map(list, map(self._rgb_tuple_from, colors))
 		colors = numpy.reshape(colors, (-1, 3))
 		self._rs = colors[:, 0]
 		self._gs = colors[:, 1]
 		self._bs = colors[:, 2]
-		self._xs = numpy.linspace(0, 1, len(colors))
+		self._xs = numpy.linspace(min, max, len(colors))
 
 	def map(self, value):
 		return (numpy.interp(value, self._xs, self._rs),
@@ -130,25 +130,16 @@ class PieceWiseLinearCalibration(object):
 		return numpy.interp(values, self.xs, self.ys)
 
 
-class TactileValue(object):
-	def __init__(self):
-		pass
-
-	def update(self, data):
-		self.current = data
-
-	def value(self):
-		return self.current
-
-
 class ValueMarker(MarkerInterface):
 	"""
 	Base class for single-value based markers.
 	"""
 	try:
-		defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
+		positiveColorMap = ColorMap(['black', 'lime', 'yellow', 'red'], min=0, max=1)
+		negativeColorMap = ColorMap(['red', 'black', 'lime'], min=-1, max=1)
 	except Exception:
-		defaultColorMap = ColorMap([(0,0,0), (0,1,0), (1,1,0), (1,0,0)])
+		positiveColorMap = ColorMap([(0,0,0), (0,1,0), (1,1,0), (1,0,0)], min=0, max=1)
+		negativeColorMap = ColorMap([(1,0,0), (0,0,0), (0,1,0)], min=-1, max=1)
 
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
@@ -157,8 +148,10 @@ class ValueMarker(MarkerInterface):
 		# new fields
 		self._normalization = PieceWiseLinearCalibration(desc.xs, desc.ys)
 		self._field_evals = msg.generate_field_evals(desc.data)
-		self._tactile_data = TactileValue()
-		self.colorMap = self.defaultColorMap
+		self._tactile_data = TactileValue(max = max(desc.ys))
+
+		self.mode     = TactileValue.rawMean
+		self.colorMap = self.positiveColorMap
 
 	def needsDataUpdate(self):
 		return True
@@ -179,7 +172,7 @@ class MeshMarker(ValueMarker):
 			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale
 
 	def update(self):
-		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self._tactile_data.value()))
+		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self._tactile_data.value(self.mode)))
 
 
 class PixelGridMarker(ValueMarker):
@@ -199,6 +192,5 @@ class PixelGridMarker(ValueMarker):
 		self.scale.x, self.scale.y = g.scale
 
 	def update(self):
-		assert len(self.colors) == len(data)
-		for color, val in zip(self.colors, self._tactile_data.value()):
+		for color, val in zip(self.colors, self._tactile_data.value(self.mode)):
 			color.r, color.g, color.b, color.a = self.colorMap.map(val)
