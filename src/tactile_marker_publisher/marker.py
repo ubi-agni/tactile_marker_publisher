@@ -27,8 +27,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import numpy as np
-
+import numpy
 import genpy
 import std_msgs.msg
 import geometry_msgs.msg
@@ -43,16 +42,16 @@ TactileMarkerDesc = parser.TactileMarker
 class ColorMap(object):
 	def __init__(self, colors):
 		colors = map(list, map(self._rgb_tuple_from, colors))
-		colors = np.reshape(colors, (-1, 3))
+		colors = numpy.reshape(colors, (-1, 3))
 		self._rs = colors[:, 0]
 		self._gs = colors[:, 1]
 		self._bs = colors[:, 2]
-		self._xs = np.linspace(0, 1, len(colors))
+		self._xs = numpy.linspace(0, 1, len(colors))
 
 	def map(self, value):
-		return (np.interp(value, self._xs, self._rs),
-		        np.interp(value, self._xs, self._gs),
-		        np.interp(value, self._xs, self._bs),
+		return (numpy.interp(value, self._xs, self._rs),
+		        numpy.interp(value, self._xs, self._gs),
+		        numpy.interp(value, self._xs, self._bs),
 		        1)
 
 	@classmethod
@@ -73,9 +72,78 @@ class ColorMap(object):
 		return color
 
 
-class Marker(visualization_msgs.msg.Marker):
+class MarkerInterface(visualization_msgs.msg.Marker):
 	"""
-	Extension of visualization_msgs.msg.Marker to hold tactile data fields
+	Extension of visualization_msgs.msg.Marker to hold tactile data fields.
+	For initialization, an instance of parser.TactileMarker is provided.
+	For every incoming message, data(msg) will be called.
+	To prepare publishing of a marker, update() will be called.
+	"""
+	def __init__(self, desc, **kwargs):
+		assert isinstance(desc, TactileMarkerDesc)
+		super(MarkerInterface, self).__init__(**kwargs)
+		self.action = action = visualization_msgs.msg.Marker.ADD
+		self.header.frame_id = desc.link   # place marker relative to this link
+		self.frame_locked    = True        # attach marker to the link
+		self.lifetime = genpy.Duration(10) # undisplay marker after n seconds
+
+		# handle optional origin field
+		if desc.origin:
+			if desc.origin.xyz:
+				self.pose.position = geometry_msgs.msg.Point(*desc.origin.xyz)
+			if desc.origin.rpy:
+				self.pose.orientation = geometry_msgs.msg.Quaternion(
+					*quaternion_from_euler(*desc.origin.rpy))
+
+	def needsDataUpdate(self):
+		"""
+		Indicates whether the marker class requires data() calls for each
+		incoming message, e.g. to normalize data. If not, data() is called only
+		once with the most recently received msg just before the update() call.
+		"""
+		return False
+
+	def data(self, msg):
+		pass
+
+	def update(self):
+		pass
+
+
+class PieceWiseLinearCalibration(object):
+	def __init__(self, xs, ys):
+		self.xs = xs
+		self.ys = ys
+
+		# interp can only handle increasing xs list: reverse if necessary
+		inreasing  = numpy.all(numpy.diff(xs) > 0)
+		decreasing = numpy.all(numpy.diff(xs) < 0)
+		if not inreasing:
+			if decreasing:
+				# reverse order of xs and ys
+				self.xs = list(reversed(self.xs))
+				self.ys = list(reversed(self.ys))
+			else:
+				raise Exception('expected list of strictly increasing or decreasing values')
+
+	def apply(self, values):
+		return numpy.interp(values, self.xs, self.ys)
+
+
+class TactileValue(object):
+	def __init__(self):
+		pass
+
+	def update(self, data):
+		self.current = data
+
+	def value(self):
+		return self.current
+
+
+class ValueMarker(MarkerInterface):
+	"""
+	Base class for single-value based markers.
 	"""
 	try:
 		defaultColorMap = ColorMap(['black', 'lime', 'yellow', 'red'])
@@ -84,64 +152,41 @@ class Marker(visualization_msgs.msg.Marker):
 
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
-		super(Marker, self).__init__(frame_locked=True, action=Marker.ADD, ns=desc.ns, **kwargs)
-		self.header.frame_id = desc.link
-		self.lifetime = genpy.Duration(10)
-
-		# store range for normalization
-		self.xs, self.ys = desc.xs, desc.ys
-		inreasing  = np.all(np.diff(self.xs) > 0)
-		decreasing = np.all(np.diff(self.xs) < 0)
-		if not inreasing:
-			if decreasing:
-				# reverse order of xs and ys
-				self.xs = list(reversed(self.xs))
-				self.ys = list(reversed(self.ys))
-			else:
-				raise Exception('expected list of strictly increasing or decreasing values')
-		self.auto_range = any(v is None for v in self.xs)
-		if self.auto_range: self.xs = [float('inf'), float('-inf')]
+		super(ValueMarker, self).__init__(desc, **kwargs)
 
 		# new fields
+		self._normalization = PieceWiseLinearCalibration(desc.xs, desc.ys)
 		self._field_evals = msg.generate_field_evals(desc.data)
-		self._tactile_data = None
+		self._tactile_data = TactileValue()
 		self.colorMap = self.defaultColorMap
 
-		# handle optional fields
-		if desc.origin:
-			if desc.origin.xyz:
-				self.pose.position = geometry_msgs.msg.Point(*desc.origin.xyz)
-			if desc.origin.rpy:
-				self.pose.orientation = geometry_msgs.msg.Quaternion(
-					*quaternion_from_euler(*desc.origin.rpy))
+	def needsDataUpdate(self):
+		return True
 
-	def normalize(self, value):
-		if self.auto_range:
-			self.xs[0] = min(self.xs[0], value)
-			self.xs[1] = max(self.xs[1], value)
-		return np.interp(value, self.xs, self.ys)
-
-	def update(self, data):
-		pass
+	def data(self, msg_data):
+		d = msg.extract_data(msg_data, self._field_evals)
+		d = self._normalization.apply(d)
+		self._tactile_data.update(d)
 
 
-class MeshMarker(Marker):
+class MeshMarker(ValueMarker):
 	def __init__(self, desc, **kwargs):
 		super(MeshMarker, self).__init__(desc, **kwargs)
-		self.type = Marker.MESH_RESOURCE
+
+		self.type = ValueMarker.MESH_RESOURCE
 		self.mesh_resource = desc.geometry.filename
 		if desc.geometry.scale:
 			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale
 
-	def update(self, data):
-		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self.normalize(data)))
+	def update(self):
+		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self._tactile_data.value()))
 
 
-class PixelGridMarker(Marker):
+class PixelGridMarker(ValueMarker):
 	def __init__(self, desc, **kwargs):
 		super(PixelGridMarker, self).__init__(desc, **kwargs)
 
-		self.type = Marker.CUBE_LIST
+		self.type = ValueMarker.CUBE_LIST
 		g = desc.geometry
 		xoff, yoff = [-(n-1)/2. * delta for n, delta in zip(g.size, g.spacing)]
 		xdelta, ydelta = g.spacing
@@ -153,8 +198,7 @@ class PixelGridMarker(Marker):
 				self.colors.append(std_msgs.msg.ColorRGBA())
 		self.scale.x, self.scale.y = g.scale
 
-	def update(self, data):
+	def update(self):
 		assert len(self.colors) == len(data)
-		for color, val in zip(self.colors, data):
-			color.r, color.g, color.b, color.a = self.colorMap.map(self.normalize(val))
-
+		for color, val in zip(self.colors, self._tactile_data.value()):
+			color.r, color.g, color.b, color.a = self.colorMap.map(val)

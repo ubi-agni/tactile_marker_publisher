@@ -28,7 +28,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import print_function
-import string
 import sys
 import threading
 
@@ -37,7 +36,6 @@ from rostopic import get_topic_class
 
 import parser
 TactileMarkerDesc = parser.TactileMarker
-import msg
 from .marker import *
 
 class Subscriber(object):
@@ -59,7 +57,7 @@ class Subscriber(object):
 		self.last_any_msg = None
 		self.last_typed_msg = None
 		self.dirty = False
-		self.update_cb = None
+		self.needsUpdateCalls = False
 
 	def createMarker(self, desc, **kwargs):
 		for type, factory in self.factory.iteritems():
@@ -71,9 +69,11 @@ class Subscriber(object):
 		"""
 		add marker
 		@param TactileMarkerDesc marker	 marker specification
-		:rtype : Marker
+		:rtype : ValueMarker
 		"""
-		m = self.createMarker(desc, **kwargs)
+		m = self.createMarker(desc, ns=desc.ns, **kwargs)
+		self.needsUpdateCalls |= m.needsDataUpdate()
+
 		# add marker to list
 		self.lock.acquire()
 		self.markers.append(m)
@@ -96,7 +96,7 @@ class Subscriber(object):
 		# store latest message for lazy processing on demand
 		self.last_any_msg = any_msg
 
-		if self.update_cb:
+		if self.needsUpdateCalls:
 			self.update()
 
 		self.lock.release()
@@ -115,11 +115,7 @@ class Subscriber(object):
 		# iterate over all markers and update their _tactile_data
 		for m in self.markers:
 			try:
-				data = msg.extract_data(self.last_typed_msg, m._field_evals)
-				if self.update_cb:
-					m._tactile_data = self.update_cb(data)
-				else:
-					m._tactile_data = data
+				m.data(self.last_typed_msg)
 				self.dirty = True
 
 			except Exception as e:
@@ -135,20 +131,12 @@ class Subscriber(object):
 			if not self.dirty: return result
 
 			for m in self.markers:
-				result.append(self.fillMarker(m))
+				m.update()
+				result.append(m)
 			self.dirty = False
 
 			return result
 
 		finally:
 			self.lock.release()
-
-	def fillMarker(self, m):
-		"""
-		Fill marker structure from tactileData
-		:param  Marker m: marker msg
-		:return Marker m: updated marker msg
-		"""
-		m.update(m._tactile_data)
-		return m
 
