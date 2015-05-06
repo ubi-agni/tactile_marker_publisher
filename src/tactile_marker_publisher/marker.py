@@ -103,6 +103,9 @@ class MarkerInterface(visualization_msgs.msg.Marker):
 		"""
 		return False
 
+	def config(self, cfg):
+		pass
+
 	def data(self, msg):
 		pass
 
@@ -141,6 +144,17 @@ class ValueMarker(MarkerInterface):
 		positiveColorMap = ColorMap([(0,0,0), (0,1,0), (1,1,0), (1,0,0)], min=0, max=1)
 		negativeColorMap = ColorMap([(1,0,0), (0,0,0), (0,1,0)], min=-1, max=1)
 
+	mode     = TactileValue.relCurrent
+	colorMap = positiveColorMap
+
+	@staticmethod
+	def setmode(mode):
+		ValueMarker.mode = mode
+		if mode >= TactileValue.relCurrentRelease:
+			ValueMarker.colorMap = ValueMarker.negativeColorMap
+		else:
+			ValueMarker.colorMap = ValueMarker.positiveColorMap
+
 	def __init__(self, desc, **kwargs):
 		assert isinstance(desc, TactileMarkerDesc)
 		super(ValueMarker, self).__init__(desc, **kwargs)
@@ -150,11 +164,13 @@ class ValueMarker(MarkerInterface):
 		self._field_evals = msg.generate_field_evals(desc.data)
 		self._tactile_data = TactileValue(max = max(desc.ys))
 
-		self.mode     = TactileValue.rawMean
-		self.colorMap = self.positiveColorMap
-
 	def needsDataUpdate(self):
 		return True
+
+	def config(self, cfg):
+		self._tactile_data.mean_lambda = cfg.value_smoothing
+		self._tactile_data.range_lambda = 1.0 - cfg.range_habituation
+		self._tactile_data.release_lambda = cfg.release_decay
 
 	def data(self, msg_data):
 		d = msg.extract_data(msg_data, self._field_evals)

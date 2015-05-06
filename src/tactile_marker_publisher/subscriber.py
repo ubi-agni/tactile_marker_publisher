@@ -101,6 +101,12 @@ class Subscriber(object):
 
 		self.lock.release()
 
+	def config(self, cfg):
+		self.lock.acquire()
+		ValueMarker.setmode(cfg.mode)
+		for m in self.markers:
+			m.config(cfg)
+		self.lock.release()
 
 	def update(self):
 		"""

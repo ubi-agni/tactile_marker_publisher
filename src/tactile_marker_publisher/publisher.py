@@ -29,8 +29,11 @@
 
 import rospy
 from visualization_msgs.msg import MarkerArray
+from dynamic_reconfigure.server import Server as CfgServer
 from .parser import TactileMarker
 from .subscriber import Subscriber
+from tactile_marker_publisher.cfg import TactileValueConfig
+
 
 class Publisher(object):
 	def __init__(self, markers):
@@ -47,8 +50,21 @@ class Publisher(object):
 			sub.addMarker(marker, id=self.numMarkers)
 			self.numMarkers += 1
 
+		if self.numMarkers == 0:
+			raise Exception('Could not find any markers')
+
 		self.pub = rospy.Publisher('tactile_markers', MarkerArray, queue_size=1)
-		print
+
+		# create dynamic config server
+		def config_callback(cfg, level):
+			self.config(cfg)
+			return cfg
+
+		self.cfg_server = CfgServer(TactileValueConfig, config_callback)
+
+	def config(self, cfg):
+		for sub in self.subscribers.itervalues():
+			sub.config(cfg)
 
 	def publish(self):
 		"""

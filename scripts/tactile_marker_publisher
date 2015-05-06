@@ -49,10 +49,9 @@ try:
 		robot = URDF.from_parameter_server()
 	else:
 		robot = URDF.from_xml_string(args.file.read())
+	print
 
 	pub = Publisher(robot.tactiles)
-	if pub.numMarkers == 0:
-		raise Exception('Could not find any markers')
 
 except Exception as e:
 	# fetch all config time errors
