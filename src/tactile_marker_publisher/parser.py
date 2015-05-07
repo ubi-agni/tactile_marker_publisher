@@ -47,7 +47,10 @@ class Grid(xmlr.Object):
 	def __init__(self, size=None, spacing=None, scale=None):
 		self.size = size
 		self.spacing = spacing
-		self.scale = scale if scale is not None else self.spacing
+		self.scale = scale
+
+	def check_valid(self):
+		if self.scale is None: self.scale = self.spacing
 
 
 xmlr.reflect(Grid, params=[
