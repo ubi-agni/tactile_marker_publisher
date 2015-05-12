@@ -144,13 +144,13 @@ class ValueMarker(MarkerInterface):
 		positiveColorMap = ColorMap([(0,0,0), (0,1,0), (1,1,0), (1,0,0)], min=0, max=1)
 		negativeColorMap = ColorMap([(1,0,0), (0,0,0), (0,1,0)], min=-1, max=1)
 
-	mode     = TactileValue.relCurrent
+	mode     = TactileValue.dynCurrent
 	colorMap = positiveColorMap
 
 	@staticmethod
 	def setmode(mode):
 		ValueMarker.mode = mode
-		if mode >= TactileValue.relCurrentRelease:
+		if mode >= TactileValue.dynCurrentRelease:
 			ValueMarker.colorMap = ValueMarker.negativeColorMap
 		else:
 			ValueMarker.colorMap = ValueMarker.positiveColorMap

@@ -60,10 +60,10 @@ class TactileValue(object):
 	rawMean    = 1
 	absCurrent = 2
 	absMean    = 3
-	relCurrent = 4
-	relMean    = 5
-	relCurrentRelease = 6
-	relMeanRelease = 7
+	dynCurrent = 4
+	dynMean    = 5
+	dynCurrentRelease = 6
+	dynMeanRelease = 7
 
 	def __init__(self, min = float('inf'), max=float('-inf')):
 		self.mean_lambda = 0.7
@@ -122,23 +122,23 @@ class TactileValue(object):
 		if mode == self.rawCurrent: return self._current
 		if mode == self.rawMean:    return self._mean
 
-		if mode == self.absCurrent: return self._current - self.abs_range.min()
-		if mode == self.absMean:    return self._mean    - self.abs_range.min()
+		if mode in [self.absCurrent, self.absMean]:
+			r = self.abs_range
+		else:
+			r = self.dyn_range
 
-		r =  max(self.dyn_range.range(), 0.1 * self.abs_range.range())
-		if r < sys.float_info.epsilon: return 0; # do not divide by zero
+		if r.range() < sys.float_info.epsilon:
+			return 0
 
-		dyn_min = self.dyn_range.min()
-		if mode >= self.relCurrentRelease and self._released is not None:
-			return -(self._released - dyn_min) / r
+		if mode >= self.dynCurrentRelease and self._released is not None:
+			return - (self._released - r.min()) / r.range()
 
-		if mode in [self.relCurrent, self.relCurrentRelease]:
-			return (self._current - dyn_min) / r
+		if mode in [self.absMean, self.dynMean, self.dynMeanRelease]:
+			v = self._mean
+		else:
+			v = self._current
 
-		if mode in [self.relMean, self.relMeanRelease]:
-			return (self._mean - dyn_min) / r
-
-		raise Exception("this should not happen")
+		return (v - r.min()) / r.range()
 
 
 class TactileValueArray(object):
