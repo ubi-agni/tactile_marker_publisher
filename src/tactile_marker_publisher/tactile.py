@@ -53,6 +53,9 @@ class Range(object):
 
 
 class TactileValue(object):
+	"""
+	Provide dynamic calibration (to observed data range) and smoothing of single values
+	"""
 	rawCurrent = 0
 	rawMean    = 1
 	absCurrent = 2
@@ -136,3 +139,23 @@ class TactileValue(object):
 			return (self._mean - dyn_min) / r
 
 		raise Exception("this should not happen")
+
+
+class TactileValueArray(object):
+	"""
+	Provide dynamic calibration and smoothing of array values.
+	"""
+	def __init__(self, min = float('inf'), max=float('-inf')):
+		self._min = min
+		self._max = max
+		self._values = None
+
+	def update(self, data):
+		if self._values is None: # first update init values array
+			self._values = [TactileValue(self._min, self._max) for d in data]
+
+		for v, d in zip(self._values, data):
+			v.update(d)
+
+	def value(self, mode):
+		return [v.value(mode) for v in self._values]

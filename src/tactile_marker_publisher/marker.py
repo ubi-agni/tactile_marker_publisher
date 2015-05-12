@@ -37,7 +37,7 @@ from tf.transformations import quaternion_from_euler
 
 import msg
 from parser import TactileMarker as TactileMarkerDesc
-from tactile import TactileValue
+from tactile import TactileValue, TactileValueArray
 
 class ColorMap(object):
 	def __init__(self, colors, min=0, max=1):
@@ -162,7 +162,7 @@ class ValueMarker(MarkerInterface):
 		# new fields
 		self._normalization = PieceWiseLinearCalibration(desc.xs, desc.ys)
 		self._field_evals = msg.generate_field_evals(desc.data)
-		self._tactile_data = TactileValue(max = max(desc.ys))
+		self._tactile_data = None
 
 	def needsDataUpdate(self):
 		return True
@@ -181,6 +181,7 @@ class ValueMarker(MarkerInterface):
 class MeshMarker(ValueMarker):
 	def __init__(self, desc, **kwargs):
 		super(MeshMarker, self).__init__(desc, **kwargs)
+		self._tactile_data = TactileValue(max = max(desc.ys))
 
 		self.type = ValueMarker.MESH_RESOURCE
 		self.mesh_resource = desc.geometry.filename
@@ -194,6 +195,7 @@ class MeshMarker(ValueMarker):
 class PixelGridMarker(ValueMarker):
 	def __init__(self, desc, **kwargs):
 		super(PixelGridMarker, self).__init__(desc, **kwargs)
+		self._tactile_data = TactileValueArray(max = max(desc.ys))
 
 		self.type = ValueMarker.CUBE_LIST
 		g = desc.geometry
