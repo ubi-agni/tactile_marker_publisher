@@ -51,6 +51,7 @@ class Subscriber(object):
 		:param topic:       ROS topic name
 		:return:            None
 		"""
+		rospy.loginfo("init subscriber %s", topic)
 		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb)
 		self.lock = threading.Lock()
 		self.markers = []

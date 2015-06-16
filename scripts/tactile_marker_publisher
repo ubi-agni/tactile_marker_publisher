@@ -50,8 +50,7 @@ try:
 	else:
 		robot = URDF.from_xml_string(args.file.read())
 	print
-
-	pub = Publisher(robot.tactiles)
+	pub = Publisher(robot.tactiles, tf_prefix=rospy.get_param('~tf_prefix', ''))
 
 except Exception as e:
 	# fetch all config time errors

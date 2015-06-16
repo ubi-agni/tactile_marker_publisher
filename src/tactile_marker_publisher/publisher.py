@@ -36,7 +36,7 @@ from tactile_marker_publisher.cfg import TactileValueConfig
 
 
 class Publisher(object):
-	def __init__(self, markers):
+	def __init__(self, markers, tf_prefix=''):
 		self.subscribers = {}
 		self.numMarkers = 0
 		for marker in markers:
@@ -47,6 +47,7 @@ class Publisher(object):
 			else:
 				self.subscribers[marker.topic] = sub = Subscriber(marker.topic)
 
+			marker.link = tf_prefix + marker.link
 			sub.addMarker(marker, id=self.numMarkers)
 			self.numMarkers += 1
 
