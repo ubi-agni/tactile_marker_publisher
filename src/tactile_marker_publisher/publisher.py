@@ -39,6 +39,10 @@ class Publisher(object):
 	def __init__(self, markers, tf_prefix=''):
 		self.subscribers = {}
 		self.numMarkers = 0
+		# create a 32bit integer hash
+		# - with 15bits in front from the node name
+		# - leaving 16bits in the end free for the marker number
+		hash_id = hash(rospy.names.get_name()) & (0x7FFF << 16)
 		for marker in markers:
 			assert isinstance(marker, TactileMarker)
 
@@ -48,7 +52,7 @@ class Publisher(object):
 				self.subscribers[marker.topic] = sub = Subscriber(marker.topic)
 
 			marker.link = tf_prefix + marker.link
-			sub.addMarker(marker, id=self.numMarkers)
+			sub.addMarker(marker, id=hash_id + self.numMarkers)
 			self.numMarkers += 1
 
 		if self.numMarkers == 0:
