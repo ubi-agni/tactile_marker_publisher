@@ -119,9 +119,9 @@ class PieceWiseLinearCalibration(object):
 		self.ys = ys
 
 		# interp can only handle increasing xs list: reverse if necessary
-		inreasing  = numpy.all(numpy.diff(xs) > 0)
+		increasing = numpy.all(numpy.diff(xs) > 0)
 		decreasing = numpy.all(numpy.diff(xs) < 0)
-		if not inreasing:
+		if not increasing:
 			if decreasing:
 				# reverse order of xs and ys
 				self.xs = list(reversed(self.xs))
@@ -190,6 +190,34 @@ class MeshMarker(ValueMarker):
 
 	def update(self):
 		self.color = std_msgs.msg.ColorRGBA(*self.colorMap.map(self._tactile_data.value(self.mode)))
+
+
+class ArrowMarker(ValueMarker):
+	def __init__(self, desc, **kwargs):
+		super(ArrowMarker, self).__init__(desc, **kwargs)
+		self._tactile_data = TactileValue(max = max(desc.ys))
+
+		self.type = ValueMarker.ARROW
+		if desc.geometry.dir is None:
+			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale
+			self.scale_factor = self.scale.x
+			self.update = self._updateScale
+		else:
+			self.dir = desc.geometry.dir
+			self.points = [self.pose.position, geometry_msgs.msg.Point()]
+			self.pose = geometry_msgs.msg.Pose()
+			self.scale.x, self.scale.y, self.scale.z = desc.geometry.scale[1:]
+			self.scale_factor = desc.geometry.scale[0]
+			self.update = self._updateStartEnd
+		self.color = std_msgs.msg.ColorRGBA(*desc.geometry.color.rgba)
+
+	def _updateStartEnd(self):
+		scale = self.scale_factor * self._tactile_data.value(self.mode)
+		for i, c in enumerate(['x', 'y', 'z']):
+			setattr(self.points[1], c, getattr(self.points[0], c) + scale * self.dir[i])
+
+	def _updateScale(self):
+		self.scale.x = self.scale_factor * self._tactile_data.value(self.mode)
 
 
 class PixelGridMarker(ValueMarker):

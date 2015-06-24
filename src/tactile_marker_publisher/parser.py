@@ -60,11 +60,34 @@ xmlr.reflect(Grid, params=[
 ])
 
 
+class Arrow(xmlr.Object):
+	def __init__(self, dir=None, scale=None, color=None):
+		self.dir   = dir
+		self.scale = scale
+		self.color = color
+
+	def check_valid(self):
+		allowedLen = [3] if self.dir is None else [3,4]
+		assert len(self.scale) in allowedLen, "Invalid scale dimension: %d, expected: %s" % (len(self.scale), allowedLen)
+		if self.dir is not None and len(self.scale) == 3:
+			self.scale.append(0)
+		if self.color is None:
+			self.color = urdf.Color(1, 0, 0, 1) # default color is red
+
+
+xmlr.reflect(Arrow, params=[
+	xmlr.Attribute('dir', 'vector3', required=False),
+	xmlr.Attribute('scale', 'vector', required=True),
+	xmlr.Element('color', urdf.Color, required=False)
+])
+
+
 class GeometricMarkerType(urdf.GeometricType):
 	def __init__(self):
 		self.factory = xmlr.FactoryType('markers', {
 			'mesh': urdf.Mesh,
-			'grid': Grid
+			'grid': Grid,
+			'arrow': Arrow,
 		})
 
 xmlr.add_type('markers', GeometricMarkerType())

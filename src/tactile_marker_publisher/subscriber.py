@@ -44,7 +44,9 @@ class Subscriber(object):
 	A single subscriber can have several markers attached to it,
 	corresponding to individual fields in the message
 	"""
-	factory = {parser.urdf.Mesh: MeshMarker, parser.Grid: PixelGridMarker}
+	factory = {parser.urdf.Mesh: MeshMarker,
+			   parser.Grid: PixelGridMarker,
+			   parser.Arrow: ArrowMarker}
 
 	def __init__(self, topic):
 		"""
