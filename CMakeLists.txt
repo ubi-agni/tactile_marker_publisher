@@ -21,5 +21,6 @@ generate_dynamic_reconfigure_options(src/tactile_marker_publisher/TactileValue.c
 
 catkin_package()
 
-catkin_install_python(PROGRAMS scripts/tactile_marker_publisher
+catkin_install_python(
+  PROGRAMS scripts/tactile_marker_publisher scripts/tactile_merger
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
