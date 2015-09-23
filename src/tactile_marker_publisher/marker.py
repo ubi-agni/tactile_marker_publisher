@@ -107,9 +107,15 @@ class MarkerInterface(visualization_msgs.msg.Marker):
 		pass
 
 	def data(self, msg):
+		"""
+		Extract data from received msg
+		"""
 		pass
 
 	def update(self):
+		"""
+		Prepare underlying msg.Marker for publication
+		"""
 		pass
 
 
