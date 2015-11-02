@@ -53,6 +53,8 @@ class Subscriber(object):
 		self.last_any_msg = None
 		self.last_typed_msg = None
 		self.dirty = False
+		self.next_time = rospy.Time()
+		self.recv_rate = rospy.Duration(1. / rospy.get_param('~recv_rate', 10))
 
 
 	def addTaxel(self, taxel):
@@ -69,6 +71,9 @@ class Subscriber(object):
 		ROS subscriber callback
 		:param any_msg: ROS message data (unserialized)
 		"""
+		if (rospy.Time.now() < self.next_time):
+			return
+
 		self.lock.acquire()
 		if self.last_typed_msg is None:
 			# retrieve topic type
@@ -78,6 +83,7 @@ class Subscriber(object):
 		# store latest message for lazy processing on demand
 		self.last_any_msg = any_msg
 
+		self.next_time = rospy.Time.now() + self.recv_rate;
 		self.lock.release()
 
 	def update(self):
@@ -98,4 +104,3 @@ class Subscriber(object):
 
 			except Exception as e:
 				print(e, file=sys.stderr)
-

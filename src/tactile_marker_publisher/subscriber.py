@@ -54,13 +54,15 @@ class Subscriber(object):
 		:return:            None
 		"""
 		rospy.loginfo("init subscriber %s", topic)
-		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb)
+		self.sub = rospy.Subscriber(topic, rospy.msg.AnyMsg, self._receive_cb, queue_size=2)
 		self.lock = threading.Lock()
 		self.markers = []
 		self.last_any_msg = None
 		self.last_typed_msg = None
 		self.dirty = False
 		self.needsUpdateCalls = False
+		self.next_time = rospy.Time()
+		self.recv_rate = rospy.Duration(1. / rospy.get_param('~recv_rate', 10))
 
 	def createMarker(self, desc, **kwargs):
 		for type, factory in self.factory.iteritems():
@@ -90,7 +92,10 @@ class Subscriber(object):
 		ROS subscriber callback
 		:param any_msg: ROS message data (unserialized)
 		"""
+		if (rospy.Time.now() < self.next_time):
+			return
 		self.lock.acquire()
+
 		if self.last_typed_msg is None:
 			# retrieve topic type
 			data_class, _, _ = get_topic_class(self.sub.name)
@@ -101,7 +106,7 @@ class Subscriber(object):
 
 		if self.needsUpdateCalls:
 			self.update()
-
+		self.next_time = rospy.Time.now() + self.recv_rate;
 		self.lock.release()
 
 	def config(self, cfg):
